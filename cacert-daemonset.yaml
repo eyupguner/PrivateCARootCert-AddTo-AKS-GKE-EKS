@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: private-cacert
+  namespace: kube-system
+  labels:
+    k8s-app: private-cacert
+spec:
+  selector:
+    matchLabels:
+      name: private-cacert
+  template:
+    metadata:
+      labels:
+        name: private-cacert
+    spec:
+      hostPID: true
+      hostNetwork: true
+      initContainers:
+      - name: private-cacert
+        image: busybox
+        securityContext:
+          privileged: true
+        command: [ 'sh' ]
+        args:
+          - -c
+          - |
+            cp /tmp/private-cacert /usr/local/share/ca-certificates/private-cacert.crt
+            nsenter --mount=/proc/1/ns/mnt -- sh -c "update-ca-certificates && systemctl restart containerd"
+        volumeMounts:
+        - name: host-path
+          mountPath: /usr/local/share/ca-certificates/
+        - name: private-cacert
+          mountPath: /tmp/
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: host-path
+        hostPath:
+          path: /usr/local/share/ca-certificates/
+      - name: private-cacert
+        secret:
+          secretName: private-cacert
+      containers:
+        - name: wait
+          image: k8s.gcr.io/pause:3.1
